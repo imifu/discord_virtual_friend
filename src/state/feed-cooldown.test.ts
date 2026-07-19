@@ -1,18 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkFeedCooldown, FEED_COOLDOWN_MS, recordFeedSubmission } from './feed-cooldown.js';
+import { endFeedSubmission, FEED_COOLDOWN_MS, recordFeedSubmission, tryBeginFeedSubmission } from './feed-cooldown.js';
 
-test('a user with no prior submission is not on cooldown', () => {
+test('a user with no prior submission can claim a slot', () => {
   const userId = 'user-first-time';
-  assert.deepEqual(checkFeedCooldown(userId), { ok: true });
+  const claim = tryBeginFeedSubmission(userId);
+  assert.equal(claim.ok, true);
+  endFeedSubmission(userId);
 });
 
-test('a user is on cooldown immediately after a recorded submission', () => {
+test('a second claim for the same user is rejected while the first is still in flight (Codex regression)', () => {
+  const userId = 'user-concurrent';
+  assert.equal(tryBeginFeedSubmission(userId).ok, true);
+
+  const second = tryBeginFeedSubmission(userId);
+  assert.equal(second.ok, false, 'a second concurrent claim must be rejected, not just the timed cooldown');
+
+  endFeedSubmission(userId);
+});
+
+test('a user is on the timed cooldown immediately after a recorded submission', () => {
   const userId = 'user-just-submitted';
   const now = new Date('2026-01-01T00:00:00Z');
   recordFeedSubmission(userId, now);
 
-  const result = checkFeedCooldown(userId, now);
+  const result = tryBeginFeedSubmission(userId, now);
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.retryAfterMs, FEED_COOLDOWN_MS);
 });
@@ -23,22 +35,34 @@ test('a user is no longer on cooldown once FEED_COOLDOWN_MS has elapsed', () => 
   recordFeedSubmission(userId, start);
 
   const after = new Date(start.getTime() + FEED_COOLDOWN_MS);
-  assert.deepEqual(checkFeedCooldown(userId, after), { ok: true });
+  const result = tryBeginFeedSubmission(userId, after);
+  assert.equal(result.ok, true);
+  endFeedSubmission(userId);
 });
 
-test('cooldowns are independent per user', () => {
+test('cooldowns and in-flight claims are independent per user', () => {
   const userA = 'user-a';
   const userB = 'user-b';
-  const now = new Date('2026-01-01T00:00:00Z');
-  recordFeedSubmission(userA, now);
+  assert.equal(tryBeginFeedSubmission(userA).ok, true);
 
-  assert.equal(checkFeedCooldown(userA, now).ok, false);
-  assert.equal(checkFeedCooldown(userB, now).ok, true);
+  assert.equal(tryBeginFeedSubmission(userA).ok, false);
+  assert.equal(tryBeginFeedSubmission(userB).ok, true);
+
+  endFeedSubmission(userA);
+  endFeedSubmission(userB);
 });
 
-test('checkFeedCooldown alone does not start the cooldown', () => {
-  const userId = 'user-check-only';
+test('endFeedSubmission releases the claim so a later call can succeed, without starting the timed cooldown', () => {
+  const userId = 'user-release';
   const now = new Date('2026-01-01T00:00:00Z');
-  checkFeedCooldown(userId, now);
-  assert.deepEqual(checkFeedCooldown(userId, now), { ok: true });
+  assert.equal(tryBeginFeedSubmission(userId, now).ok, true);
+
+  endFeedSubmission(userId);
+
+  assert.equal(tryBeginFeedSubmission(userId, now).ok, true, 'releasing an in-flight claim without recording a submission must not start the timed cooldown');
+  endFeedSubmission(userId);
+});
+
+test('endFeedSubmission is a no-op when no claim is held', () => {
+  assert.doesNotThrow(() => endFeedSubmission('user-no-claim'));
 });

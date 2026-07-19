@@ -13,7 +13,7 @@
     "devices": "tsx src/audio/device-list.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "test": "tsx --test src/state/bridge-state.test.ts src/services/bridge-service.test.ts src/services/feedback-classifier.test.ts src/services/feedback-content.test.ts src/state/feed-cooldown.test.ts"
+    "test": "tsx --test src/state/bridge-state.test.ts src/services/bridge-service.test.ts src/services/feedback-classifier.test.ts src/services/feedback-content.test.ts src/services/feedback-service.test.ts src/state/feed-cooldown.test.ts"
   },
   "engines": {
     "node": ">=20"
