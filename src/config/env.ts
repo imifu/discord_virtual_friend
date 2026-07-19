@@ -111,6 +111,19 @@ export interface AppConfig {
     token?: string;
     repo?: string;
   };
+  feed: {
+    /** Cosine similarity (0-1) an open issue must reach before /feed comments on it instead of
+     *  creating a new issue. Was briefly lowered to 0.49 to catch more paraphrases, but real
+     *  usage (README section 21) produced a confirmed false merge at 0.61 ("ラグい", a lag
+     *  complaint, attached to an unrelated "be funnier" issue) - the repository owner restored
+     *  0.65 to prioritize not merging unrelated feedback over catching every paraphrase.
+     *  Issue #7 still flags this as something to keep tuning from real usage, not a permanently
+     *  validated constant. */
+    similarityThreshold: number;
+    /** Minimum time (ms) a Discord user must wait between /feed submissions, to bound abuse/spam.
+     *  5 minutes by default; lower for local testing via FEED_COOLDOWN_SECONDS. */
+    cooldownMs: number;
+  };
 }
 
 let cached: AppConfig | undefined;
@@ -177,6 +190,10 @@ export function loadConfig(): AppConfig {
     github: {
       token: optionalString('GITHUB_TOKEN'),
       repo: optionalString('GITHUB_REPO'),
+    },
+    feed: {
+      similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.65),
+      cooldownMs: optionalNonNegativeInt('FEED_COOLDOWN_SECONDS', 300) * 1000,
     },
   };
 

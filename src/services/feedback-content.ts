@@ -14,6 +14,11 @@ export interface FeedbackContentInput {
   submittedAt: Date;
 }
 
+export interface CommentContentInput extends FeedbackContentInput {
+  /** Cosine similarity (0-1) to the existing issue this comment is being added to. */
+  similarity: number;
+}
+
 export interface IssueContent {
   title: string;
   body: string;
@@ -56,6 +61,7 @@ function truncateForTitle(text: string): string {
  * Builds a new-issue title/body/labels from /feed input. Pure formatting - no I/O.
  * The guild name is deliberately NOT part of this input: it must never be published to GitHub
  * (Issue #7). The author name IS included, but only in masked form (see maskAuthorName).
+ * Called only when no existing open issue was similar enough (see buildCommentContent otherwise).
  */
 export function buildIssueContent(input: FeedbackContentInput): IssueContent {
   const { category, submittedAt } = input;
@@ -74,11 +80,40 @@ export function buildIssueContent(input: FeedbackContentInput): IssueContent {
     '',
     `- 分類: ${info.label}`,
     `- 送信者: ${authorName}`,
-    '- 類似Issue判定: 未実施(Phase 2で対応予定)',
+    '- 類似Issue判定: 十分に類似するOpen Issueなし(新規作成)',
     `- 送信日時: ${submittedAt.toLocaleString('ja-JP')}`,
     '',
     '*このIssueはDiscordの `/feed` コマンドから自動投稿されました。*',
   ].join('\n');
 
   return { title, body, labels: [info.githubLabel] };
+}
+
+/**
+ * Builds a comment body (no title/labels - comments don't have either) for when an existing open
+ * issue is similar enough to the new /feed submission. Same sanitization/masking as
+ * buildIssueContent.
+ */
+export function buildCommentContent(input: CommentContentInput): { body: string } {
+  const { category, submittedAt, similarity } = input;
+  const text = sanitizeForGithub(input.text);
+  const authorName = sanitizeForGithub(maskAuthorName(input.authorName));
+  const info = CATEGORY_INFO[category];
+
+  const body = [
+    '## Discordからの追加フィードバック',
+    '',
+    text,
+    '',
+    '## 自動判定',
+    '',
+    `- 分類: ${info.label}`,
+    `- 送信者: ${authorName}`,
+    `- このIssueとの類似度: ${similarity.toFixed(2)}`,
+    `- 送信日時: ${submittedAt.toLocaleString('ja-JP')}`,
+    '',
+    '*このコメントはDiscordの `/feed` コマンドから自動投稿されました。*',
+  ].join('\n');
+
+  return { body };
 }
