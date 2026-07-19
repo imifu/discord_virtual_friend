@@ -186,9 +186,13 @@ async function handleFeed(interaction: ChatInputCommandInteraction): Promise<voi
     guildName: interaction.guild?.name ?? '(不明なサーバー)',
   });
 
-  await interaction.editReply(
-    `フィードバックを送信しました(分類: ${CATEGORY_INFO[result.category].label})。\n${result.issueUrl}`,
-  );
+  const categoryLabel = CATEGORY_INFO[result.category].label;
+  const message =
+    result.outcome === 'commented'
+      ? `フィードバックを受け付けました。\n\n判定: ${categoryLabel}\n関連Issue: #${result.issueNumber}\n処理: Issueへコメントを追加しました。\n${result.issueUrl}`
+      : `フィードバックを受け付けました。\n\n判定: ${categoryLabel}\n処理: Issue #${result.issueNumber} を作成しました。\n${result.issueUrl}`;
+
+  await interaction.editReply(message);
 }
 
 const handlers: Record<string, Handler> = {
