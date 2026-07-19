@@ -51,10 +51,21 @@ export function findMostSimilarIssue(
   return best;
 }
 
-const MAX_ISSUE_TEXT_LENGTH = 2000;
-
+/**
+ * Only the title is embedded for similarity matching, not title+body. Empirically (real /feed
+ * usage against this repo, see README section 21), comparing a new submission's raw text against
+ * an existing issue's full body - which for /feed-created issues is mostly fixed template text
+ * ("## 自動判定", "- 分類: ...", "- 送信日時: ...", the "自動投稿されました" footer etc., largely
+ * identical across every issue) drowns out the few words of actual feedback content: genuine
+ * paraphrases of the same request measured ~0.79 title-to-title but only ~0.39 when the existing
+ * issue's full title+body was used instead - well under any reasonable threshold. Titles avoid
+ * this because they're short and, for /feed-created issues, are literally "[category] " + the
+ * feedback text itself (see buildIssueContent) - no boilerplate to dilute the signal. The
+ * category prefix is kept (not stripped) because it also empirically improved separation from
+ * unrelated issues (~0.28 vs ~0.49 similarity in the same real-world comparison).
+ */
 function issueEmbeddingText(issue: OpenIssueSummary): string {
-  return `${issue.title}\n${issue.body}`.slice(0, MAX_ISSUE_TEXT_LENGTH);
+  return issue.title;
 }
 
 /** issue number -> embedding, invalidated whenever the issue's updatedAt changes. Module-scope
@@ -63,9 +74,10 @@ function issueEmbeddingText(issue: OpenIssueSummary): string {
 const issueEmbeddingCache = new Map<number, { updatedAt: string; embedding: Float32Array }>();
 
 /**
- * Embeds every given issue (title+body), reusing a cached embedding when the issue hasn't
- * changed since it was last embedded. `embed` is injectable for tests; production code always
- * uses the real embedFeedbackText (I/O, worker thread - not unit tested itself).
+ * Embeds every given issue's title (see issueEmbeddingText for why title-only), reusing a cached
+ * embedding when the issue hasn't changed since it was last embedded. `embed` is injectable for
+ * tests; production code always uses the real embedFeedbackText (I/O, worker thread - not unit
+ * tested itself).
  */
 export async function getIssueEmbeddings(
   issues: OpenIssueSummary[],

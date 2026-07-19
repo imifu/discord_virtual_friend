@@ -81,6 +81,35 @@ test('getIssueEmbeddings embeds every issue when nothing is cached yet', async (
   assert.equal(results.length, 2);
 });
 
+test('getIssueEmbeddings embeds only the issue title, not the body (real-world regression)', async () => {
+  // Empirically (see README section 21), embedding an existing issue's full title+body - which
+  // for /feed-created issues is mostly fixed template text ("## 自動判定" etc., near-identical
+  // across every issue) - drowns out the few words of actual feedback content and made genuine
+  // duplicate feedback fail to match in production (Issue #16 vs #11/#14/#15). Only the title
+  // (which for /feed-created issues already is "[category] " + the feedback text, see
+  // buildIssueContent) should ever reach the embed function.
+  const embeddedTexts: string[] = [];
+  const embed = async (text: string): Promise<Float32Array> => {
+    embeddedTexts.push(text);
+    return Float32Array.from([1, 0]);
+  };
+  const issue: OpenIssueSummary = {
+    number: 301,
+    title: '[改善提案] 落ち着いた感じで、会話には参加してほしい',
+    body:
+      '## Discordからのフィードバック\n\n落ち着いた感じで、会話には参加してほしい\n\n' +
+      '## 自動判定\n\n- 分類: 改善提案\n- 送信者: 13***\n- 類似Issue判定: 十分に類似するOpen Issueなし(新規作成)\n' +
+      '- 送信日時: 2026/7/20 1:12:10\n\n*このIssueはDiscordの `/feed` コマンドから自動投稿されました。*',
+    url: 'u',
+    updatedAt: 'v1',
+  };
+
+  await getIssueEmbeddings([issue], embed);
+
+  assert.deepEqual(embeddedTexts, [issue.title]);
+  assert.ok(!embeddedTexts[0]!.includes('自動判定'), 'template boilerplate from the body must never reach the embed function');
+});
+
 test('getIssueEmbeddings reuses a cached embedding when updatedAt is unchanged', async () => {
   let embedCalls = 0;
   const embed = async (): Promise<Float32Array> => {
