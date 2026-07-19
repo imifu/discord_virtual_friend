@@ -58,11 +58,7 @@ export function preloadFeedbackEmbeddingModel(): void {
   getWorker().postMessage({ id: 0, preload: true });
 }
 
-/**
- * Embeds free-form text (a /feed submission, or an open issue's title+body) into a normalized
- * sentence vector using a local multilingual model (no external API) - off the main thread.
- */
-export function embedFeedbackText(text: string): Promise<Float32Array> {
+function requestEmbeddingFromWorker(text: string): Promise<Float32Array> {
   const id = nextId++;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
@@ -74,3 +70,67 @@ export function embedFeedbackText(text: string): Promise<Float32Array> {
     }
   });
 }
+
+/**
+ * Wraps a raw (potentially concurrency-unsafe) embed function so at most one call is ever
+ * in flight at a time, in FIFO order, and concurrent calls for the identical text share a single
+ * in-flight request instead of issuing duplicate work. Exported (not just used internally) so
+ * this concurrency behavior can be unit tested with a fake `requestEmbedding` - the real worker
+ * communication itself isn't unit tested (I/O, like every other worker in this codebase).
+ *
+ * Without this, two Discord users calling /feed around the same time - or two cache-miss issues
+ * within a single /feed's getIssueEmbeddings() loop racing against another /feed's loop - could
+ * each start their own `extractor(...)` call on the shared pipeline at the same time.
+ * `intraOpNumThreads: 1` only bounds a single inference's own thread pool; it does not limit how
+ * many inferences run concurrently, so without this queue the live audio pipeline could still be
+ * starved of CPU exactly as Issue #7's "dedicated worker, concurrency 1" requirement warns against.
+ */
+export function createSerializedEmbedder(
+  requestEmbedding: (text: string) => Promise<Float32Array>,
+): (text: string) => Promise<Float32Array> {
+  interface QueuedJob {
+    text: string;
+    resolve: (embedding: Float32Array) => void;
+    reject: (err: unknown) => void;
+  }
+
+  let inFlight = false;
+  const queue: QueuedJob[] = [];
+  const inFlightByText = new Map<string, Promise<Float32Array>>();
+
+  function pump(): void {
+    if (inFlight) return;
+    const job = queue.shift();
+    if (!job) return;
+    inFlight = true;
+
+    requestEmbedding(job.text)
+      .then(job.resolve, job.reject)
+      .finally(() => {
+        inFlight = false;
+        pump();
+      });
+  }
+
+  return function embed(text: string): Promise<Float32Array> {
+    const existing = inFlightByText.get(text);
+    if (existing) return existing;
+
+    const promise = new Promise<Float32Array>((resolve, reject) => {
+      queue.push({ text, resolve, reject });
+      pump();
+    }).finally(() => {
+      inFlightByText.delete(text);
+    });
+
+    inFlightByText.set(text, promise);
+    return promise;
+  };
+}
+
+/**
+ * Embeds free-form text (a /feed submission, or an open issue's title+body) into a normalized
+ * sentence vector using a local multilingual model (no external API) - off the main thread, and
+ * serialized to at most one concurrent inference (see createSerializedEmbedder).
+ */
+export const embedFeedbackText = createSerializedEmbedder(requestEmbeddingFromWorker);
