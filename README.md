@@ -267,12 +267,14 @@ ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 - FFmpegはこのアプリの音声パイプラインでは使用していません(3章参照)。`FFmpegプロセスの状態`という表現は現在の実装では「RtAudioストリームの状態」を指します
 - `Ctrl+C`(SIGINT)による終了処理は自動テストできておらず、動作確認は開発者による手動実施のみです(下記テスト手順参照)
 - `npm audit` で報告される脆弱性のうち、discord.js が依存する `undici` およびaudifyのビルドフォールバック(`cmake-js`/`tar`、実行時には未使用)由来のものは、上流の対応待ちのため未修正です
+- `/feed`の類似Issue判定は、対象リポジトリの最新Open Issue最大300件のみを比較対象とします(21章参照)。それを超える件数のOpen Issueがある場合、古いものは比較対象外になります
 
 ## 21. /feedによるGitHubフィードバック連携の設定
 
 Discord VC参加者が改善案・不具合をGitHub操作なしで送れる `/feed content:<テキスト>` コマンドです
-(Issue #7 Phase 1)。**注意: 分類・投稿は完全自動で、人間による確認ステップはありません。**
-公開リポジトリを対象にする場合、送信されたフィードバック本文がそのままIssueとして公開されます。
+(Issue #7 Phase 1〜2a)。**注意: 分類・類似判定・投稿は完全自動で、人間による確認ステップはありません。**
+公開リポジトリを対象にする場合、送信されたフィードバック本文がそのままIssueまたはコメントとして
+公開されます。
 
 Issue #7は「Discordユーザー名・IDはGitHubへ原則掲載しない」方針ですが、リポジトリオーナーの判断により
 **表示名の先頭2文字のみを掲載し、残りは`*`で伏字にした形**でIssue本文へ含めます(例:
@@ -292,6 +294,19 @@ Issue #7は「Discordユーザー名・IDはGitHubへ原則掲載しない」方
 
    どちらか未設定のまま `/feed` を実行すると、Bot自体は起動しますが `/feed` 実行時にのみ
    「GITHUB_TOKEN と GITHUB_REPO を .env に設定してください」エラーになります(起動時チェックではありません)。
+
+### 類似Issue判定
+
+送信テキストと対象リポジトリのOpen Issue(タイトル+本文、最大300件)を、ローカルの多言語文埋め込み
+モデル(`Xenova/paraphrase-multilingual-MiniLM-L12-v2`、`@huggingface/transformers`、外部AI API不使用)
+でベクトル化し、コサイン類似度を比較します。
+
+- `FEED_SIMILARITY_THRESHOLD`(既定値`0.8`)以上の既存Issueが見つかった場合、その中で最も類似度が
+  高いIssueへ**コメントを追加**します。
+- 見つからない場合は**新規Issueを作成**します(Phase 1までと同じ挙動)。
+- この閾値はIssue #7自身が「運用しながら調整する設計事項」としている暫定値です。
+- Issue一覧取得やEmbedding計算自体が失敗した場合、無関係なIssueへ誤って統合するより安全側に倒し、
+  新規作成へフォールバックせず`/feed`全体をエラーとして返します。
 
 ### 分類とラベル
 
@@ -313,10 +328,15 @@ GitHubのIssue作成APIがラベル未存在時に自動作成するかは保証
 ユーザーごとに5分に1回のクールダウンのみを設けています(同一ユーザーからの同時多重実行も1件のみ処理されます)。
 実行権限自体はサーバー参加者全員に開放されています。
 
-### 未実装(Phase 2、Issue #7継続対応)
+### 未実装(Phase 2b、Issue #7継続対応)
 
-既存IssueとのローカルEmbeddingによる類似度判定・コメント追加、GitHub API障害時の永続リトライキューは
-未実装です。現状、GitHub APIの呼び出しが失敗した場合は`/feed`のエラー応答のみで、再送はされません。
+GitHub API障害時の永続リトライキューは未実装です。現状、GitHub APIの呼び出しやEmbedding計算が
+失敗した場合は`/feed`のエラー応答のみで、再送はされません。
+
+### 既知の残課題
+
+- [Issue #12](https://github.com/imifu/discord_virtual_friend/issues/12): ラベル未付与時も`/feed`が
+  成功応答を返してしまう(検出・ログ警告は実装済み)。
 
 ---
 
@@ -353,3 +373,5 @@ GitHubのIssue作成APIがラベル未存在時に自動作成するかは保証
 | 24 | /feedでIssue作成成功 | `GITHUB_TOKEN`/`GITHUB_REPO`設定後に`/feed content:テスト送信です` | 対象リポジトリに新規Issueが作成され、返信にその分類とURLが表示される |
 | 25 | GITHUB_TOKEN未設定時のエラー | `.env`の`GITHUB_TOKEN`を空にして`/feed content:テスト` | 「GITHUB_TOKEN と GITHUB_REPO を .env に設定してください」エラー、Botは起動したまま |
 | 26 | /feedクールダウン | 24の直後にもう一度`/feed content:テスト2` | 「/feedの連続実行はできません」エラー、5分経過後は再度成功する |
+| 27 | 類似Issueへのコメント追加 | 24で作成したIssueと似た内容で`/feed content:<類似する文言>`を実行(`FEED_SIMILARITY_THRESHOLD`未設定なら既定0.8) | 新規Issueは作成されず、既存Issueへコメントが追加される。返信に`関連Issue: #N`が表示される |
+| 28 | 類似Issueなしの場合の新規作成 | 既存Issueと無関係な内容で`/feed content:<無関係な文言>` | 新規Issueが作成される(27と混同しないこと) |
