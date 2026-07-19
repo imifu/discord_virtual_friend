@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream';
 import type { AudioPlayer } from '@discordjs/voice';
 import { AudioPlayerStatus, createAudioPlayer, createAudioResource, StreamType } from '@discordjs/voice';
 import { createLogger } from '../utils/logger.js';
-import { getRuntime, getStatus, updateStatus } from '../state/bridge-state.js';
+import { endRelayStart, getRuntime, tryBeginRelayStart, updateStatus } from '../state/bridge-state.js';
 import { loadConfig, requireDeviceConfig } from '../config/env.js';
 import { ConfigError, NotConnectedError, RelayAlreadyRunningError } from '../utils/errors.js';
 import { PcmMixer } from '../audio/pcm-mixer.js';
@@ -44,11 +44,22 @@ const OUTBOUND_RESTART_MAX_DELAY_MS = 30_000;
  * (plus a release hold), Discord's audio is attenuated/muted before being written to device A.
  */
 export async function startRelay(guildId: string, client: Client): Promise<void> {
-  const status = getStatus(guildId);
-  if (status.relayRunning) {
+  if (!tryBeginRelayStart(guildId)) {
     throw new RelayAlreadyRunningError();
   }
+  try {
+    await startRelayInternal(guildId, client);
+  } finally {
+    endRelayStart(guildId);
+  }
+}
 
+/**
+ * Holds the exclusive claim taken by startRelay() for the whole initialization, including the
+ * failure path (stopRelay() cleanup below), so a second concurrent startRelay() call for the same
+ * guild can never observe relayRunning=false and race a fresh runtime into one still being torn down.
+ */
+async function startRelayInternal(guildId: string, client: Client): Promise<void> {
   const runtime = getRuntime(guildId);
   const voiceConnection = runtime.voiceConnection;
   if (!voiceConnection) {
