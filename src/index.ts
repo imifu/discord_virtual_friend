@@ -6,6 +6,7 @@ import { dispatchCommand } from './discord/commands.js';
 import { leaveChannel } from './discord/voice-connection.js';
 import { ConfigError } from './utils/errors.js';
 import { preloadSttModel, type WorkerPurpose } from './audio/stt.js';
+import { preloadFeedbackEmbeddingModel } from './services/feedback-embedding.js';
 
 const logger = createLogger('index');
 
@@ -39,6 +40,7 @@ async function main(): Promise<void> {
   const preloadPurposes: WorkerPurpose[] = [];
   if (config.messagePosting.enabled) preloadPurposes.push('scan', 'capture');
   if (preloadPurposes.length > 0) preloadSttModel(preloadPurposes);
+  if (config.github.token && config.github.repo) preloadFeedbackEmbeddingModel();
 
   const client = createDiscordClient();
 
