@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import { buildIssueContent } from './feedback-content.js';
 
 const baseInput = {
-  authorName: 'テストユーザー',
-  guildName: 'テストサーバー',
   submittedAt: new Date('2026-07-19T12:00:00+09:00'),
 };
 
@@ -27,11 +25,32 @@ test('labels reflect the classified category', () => {
   assert.deepEqual(labels, ['bug']);
 });
 
-test('body includes author, guild, and category metadata', () => {
+test('body includes the category and a /feed attribution, but never the Discord author or guild name (Issue #7 requirement / Codex finding)', () => {
   const { body } = buildIssueContent({ ...baseInput, text: 'テスト内容', category: 'question' });
 
-  assert.ok(body.includes('テストユーザー'));
-  assert.ok(body.includes('テストサーバー'));
   assert.ok(body.includes('質問'));
   assert.ok(body.includes('/feed'));
+  assert.ok(!body.includes('送信者'));
+  assert.ok(!body.includes('サーバー'));
+});
+
+test('mentions in feedback text are neutralized so GitHub does not notify the mentioned account (Codex finding)', () => {
+  const { title, body } = buildIssueContent({
+    ...baseInput,
+    text: '@octocat さん、@some-org/some-team にも見てほしいです',
+    category: 'enhancement',
+  });
+
+  assert.ok(!/@[A-Za-z0-9]/.test(title), 'title must not contain a live-looking @mention');
+  assert.ok(!/@[A-Za-z0-9]/.test(body), 'body must not contain a live-looking @mention');
+  assert.ok(body.includes('octocat'), 'the original text content should still be readable');
+});
+
+test('control characters in feedback text are stripped, while newlines/tabs are preserved (Codex finding)', () => {
+  const text = 'line one\nline two\twith tab\x07\x1Bbell-and-escape';
+  const { body } = buildIssueContent({ ...baseInput, text, category: 'bug' });
+
+  assert.ok(body.includes('line one\nline two\twith tab'));
+  assert.ok(!body.includes('\x07'));
+  assert.ok(!body.includes('\x1B'));
 });
