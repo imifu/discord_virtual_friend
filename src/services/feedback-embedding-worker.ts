@@ -19,16 +19,32 @@ interface EmbeddingWorkerResponse {
   error?: string;
 }
 
-let extractorPromise: Promise<FeatureExtractionPipeline> | undefined;
-
-function getExtractor(): Promise<FeatureExtractionPipeline> {
-  if (!extractorPromise) {
-    extractorPromise = pipeline('feature-extraction', MODEL_NAME, {
-      session_options: { intraOpNumThreads: INTRA_OP_NUM_THREADS, interOpNumThreads: 1, executionMode: 'sequential' },
-    });
-  }
-  return extractorPromise;
+/**
+ * Memoizes factory() the first time it succeeds, but does NOT memoize a failure: if factory()
+ * rejects, the cached promise is cleared so the next call retries from scratch. A plain
+ * `if (!cached) cached = factory()` (as this used to be) would otherwise permanently break the
+ * consumer after a single transient failure (e.g. a network hiccup during the model's first
+ * download) - every subsequent call would keep awaiting the same already-rejected promise until
+ * the whole process restarts. Exported for unit testing without needing a real pipeline().
+ */
+export function createRetryingLazySingleton<T>(factory: () => Promise<T>): () => Promise<T> {
+  let cached: Promise<T> | undefined;
+  return function get(): Promise<T> {
+    if (!cached) {
+      cached = factory().catch((err: unknown) => {
+        cached = undefined;
+        throw err;
+      });
+    }
+    return cached;
+  };
 }
+
+const getExtractor = createRetryingLazySingleton<FeatureExtractionPipeline>(() =>
+  pipeline('feature-extraction', MODEL_NAME, {
+    session_options: { intraOpNumThreads: INTRA_OP_NUM_THREADS, interOpNumThreads: 1, executionMode: 'sequential' },
+  }),
+);
 
 function post(message: EmbeddingWorkerResponse): void {
   parentPort?.postMessage(message);
