@@ -32,6 +32,7 @@ async function main(): Promise<void> {
 
   setLogLevel(config.logLevel);
   registerSecret(config.discord.token);
+  if (config.github.token) registerSecret(config.github.token);
 
   logger.info('Bot起動処理を開始します');
 

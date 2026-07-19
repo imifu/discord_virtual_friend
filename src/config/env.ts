@@ -107,6 +107,10 @@ export interface AppConfig {
     fileDir: string;
     gptUtteranceHoldMs: number;
   };
+  github: {
+    token?: string;
+    repo?: string;
+  };
 }
 
 let cached: AppConfig | undefined;
@@ -170,6 +174,10 @@ export function loadConfig(): AppConfig {
       fileDir: optionalString('TRANSCRIPT_LOG_DIR') ?? 'logs',
       gptUtteranceHoldMs: optionalInt('TRANSCRIPT_GPT_UTTERANCE_HOLD_MS', 1500),
     },
+    github: {
+      token: optionalString('GITHUB_TOKEN'),
+      repo: optionalString('GITHUB_REPO'),
+    },
   };
 
   cached = config;
@@ -185,4 +193,17 @@ export function requireDeviceConfig(config: AppConfig): { discordToGpt: string; 
     );
   }
   return { discordToGpt, gptToDiscord };
+}
+
+/** Ensures GitHub PAT + "owner/repo" are configured; throws ConfigError otherwise. Call before using /feed. */
+export function requireGithubConfig(config: AppConfig): { token: string; owner: string; repo: string } {
+  const { token, repo } = config.github;
+  if (!token || !repo) {
+    throw new ConfigError('GITHUB_TOKEN と GITHUB_REPO を .env に設定してください。/feedコマンドを使うには両方が必要です。');
+  }
+  const [owner, repoName] = repo.split('/');
+  if (!owner || !repoName || repo.split('/').length !== 2) {
+    throw new ConfigError(`GITHUB_REPO は "owner/repo" 形式で指定してください (現在値: "${repo}")。`);
+  }
+  return { token, owner, repo: repoName };
 }

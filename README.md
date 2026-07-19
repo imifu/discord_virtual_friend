@@ -268,6 +268,56 @@ ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 - `Ctrl+C`(SIGINT)による終了処理は自動テストできておらず、動作確認は開発者による手動実施のみです(下記テスト手順参照)
 - `npm audit` で報告される脆弱性のうち、discord.js が依存する `undici` およびaudifyのビルドフォールバック(`cmake-js`/`tar`、実行時には未使用)由来のものは、上流の対応待ちのため未修正です
 
+## 21. /feedによるGitHubフィードバック連携の設定
+
+Discord VC参加者が改善案・不具合をGitHub操作なしで送れる `/feed content:<テキスト>` コマンドです
+(Issue #7 Phase 1)。**注意: 分類・投稿は完全自動で、人間による確認ステップはありません。**
+公開リポジトリを対象にする場合、送信されたフィードバック本文がそのままIssueとして公開されます。
+
+Issue #7は「Discordユーザー名・IDはGitHubへ原則掲載しない」方針ですが、リポジトリオーナーの判断により
+**表示名の先頭2文字のみを掲載し、残りは`*`で伏字にした形**でIssue本文へ含めます(例:
+「たなかたろう」→「たな****」)。**サーバー名はこの例外の対象外で、常に非公開です**(Botのログにのみ
+内部的に記録されます)。また、本文中の `@` はGitHub側でメンション扱いされないよう自動的に無害化されます。
+
+### 設定方法
+
+1. GitHubで対象リポジトリのみに権限を絞った fine-grained Personal Access Token を発行します。
+   Repository permissions は **Issues: Read and write** のみで十分です。
+2. `.env` に以下を設定します。
+
+   ```
+   GITHUB_TOKEN=<発行したトークン>
+   GITHUB_REPO=<owner>/<repo>
+   ```
+
+   どちらか未設定のまま `/feed` を実行すると、Bot自体は起動しますが `/feed` 実行時にのみ
+   「GITHUB_TOKEN と GITHUB_REPO を .env に設定してください」エラーになります(起動時チェックではありません)。
+
+### 分類とラベル
+
+送信テキストはローカルの固定キーワードルール(外部AI API不使用)で以下のいずれかに分類され、
+対応するGitHubラベルが新規Issueへ付与されます。
+
+| 分類 | GitHubラベル | 判定 |
+|---|---|---|
+| 不具合 | `bug` | 「落ちた」「エラー」「聞こえない」等のキーワードを含む(最優先) |
+| 質問 | `question` | 文末が `?`/`？`、または「教えて」「なぜ」等を含む |
+| 改善提案 | `enhancement` | 「提案」「〜してほしい」等を含む。上記いずれにも該当しない場合のデフォルト |
+
+**`bug`/`enhancement`/`question` の3ラベルを対象リポジトリへあらかじめ作成しておくことを推奨します。**
+GitHubのIssue作成APIがラベル未存在時に自動作成するかは保証されないため、存在しないラベルは
+付与されないままIssue自体は作成されます(その場合Botのログに警告が出力されます)。
+
+### 乱用対策
+
+ユーザーごとに5分に1回のクールダウンのみを設けています(同一ユーザーからの同時多重実行も1件のみ処理されます)。
+実行権限自体はサーバー参加者全員に開放されています。
+
+### 未実装(Phase 2、Issue #7継続対応)
+
+既存IssueとのローカルEmbeddingによる類似度判定・コメント追加、GitHub API障害時の永続リトライキューは
+未実装です。現状、GitHub APIの呼び出しが失敗した場合は`/feed`のエラー応答のみで、再送はされません。
+
 ---
 
 ## 手動テスト手順
@@ -300,3 +350,6 @@ ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 | 21 | 賢い割り込み | GPT発話中にDiscordで発話 | GPT音量が下がり、Discord入力ゲートが開く。発話終了後に復帰 |
 | 22 | 直前クリップ | 中継開始後に`/clip seconds:30` | DiscordとGPTの直前ミックス音声WAVが添付される |
 | 23 | 空気読みプロンプト | `/airprompt` | ChatGPT Liveへ設定するプロンプトが本人だけに表示される |
+| 24 | /feedでIssue作成成功 | `GITHUB_TOKEN`/`GITHUB_REPO`設定後に`/feed content:テスト送信です` | 対象リポジトリに新規Issueが作成され、返信にその分類とURLが表示される |
+| 25 | GITHUB_TOKEN未設定時のエラー | `.env`の`GITHUB_TOKEN`を空にして`/feed content:テスト` | 「GITHUB_TOKEN と GITHUB_REPO を .env に設定してください」エラー、Botは起動したまま |
+| 26 | /feedクールダウン | 24の直後にもう一度`/feed content:テスト2` | 「/feedの連続実行はできません」エラー、5分経過後は再度成功する |
