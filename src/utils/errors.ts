@@ -69,6 +69,23 @@ export class ClipUnavailableError extends AppError {
   }
 }
 
+export class GithubApiError extends AppError {
+  constructor(detail: string, cause?: unknown) {
+    super(
+      'GitHubへのIssue作成に失敗しました。しばらくしてから再度お試しください。',
+      `GithubApiError: ${detail}`,
+      { cause },
+    );
+  }
+}
+
+export class FeedCooldownError extends AppError {
+  constructor(retryAfterMs: number) {
+    const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+    super(`/feedの連続実行はできません。あと${retryAfterSec}秒ほど待ってから再度お試しください。`);
+  }
+}
+
 export function toUserMessage(error: unknown): string {
   if (error instanceof AppError) return error.userMessage;
   return '予期しないエラーが発生しました。詳細はログを確認してください。';
