@@ -518,14 +518,20 @@ export async function stopRelay(guildId: string): Promise<void> {
   runtime.receiverHandle?.detach();
   runtime.receiverHandle = undefined;
 
-  if (runtime.utteranceRecorder && runtime.client) {
-    const utterances = await runtime.utteranceRecorder.detach();
-    const client = runtime.client;
+  // Captured and cleared before the await below (unlike every other handle here, detach() is not
+  // idempotent): a concurrent stopRelay() call for the same guild must see utteranceRecorder as
+  // already undefined, not call detach() a second time, and fall through to the resource teardown
+  // further down instead - otherwise both calls would double-transcribe/double-post the session
+  // and race on deleting the same temp directory.
+  const recorder = runtime.utteranceRecorder;
+  const client = runtime.client;
+  runtime.utteranceRecorder = undefined;
+  if (recorder && client) {
+    const utterances = await recorder.detach();
     finalizeAndPostTranscript(guildId, client, utterances).catch((err) =>
       logger.error(`会話ログの文字起こし処理に失敗しました: guild=${guildId}`, err),
     );
   }
-  runtime.utteranceRecorder = undefined;
 
   runtime.utteranceSpeakingGate?.destroy();
   runtime.utteranceSpeakingGate = undefined;
