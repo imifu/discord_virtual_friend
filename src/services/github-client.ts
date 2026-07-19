@@ -1,4 +1,7 @@
 import { GithubApiError } from '../utils/errors.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('github-client');
 
 const GITHUB_API_VERSION = '2022-11-28';
 const USER_AGENT = 'discord-virtual-friend-bot';
@@ -23,9 +26,18 @@ export interface CreatedIssue {
 interface GithubIssueResponse {
   html_url: string;
   number: number;
+  labels: Array<{ name: string } | string>;
 }
 
-/** Creates a new issue via the GitHub REST API. Native fetch - no new dependency. */
+/**
+ * Creates a new issue via the GitHub REST API. Native fetch - no new dependency.
+ *
+ * Whether GitHub auto-creates a label that doesn't yet exist in the repo when it's passed here
+ * is not something this code relies on either way: after creation, the response's actual labels
+ * are compared against what was requested, and any that didn't attach are logged as a warning
+ * (issue creation itself still succeeds - a missing label is a data-quality issue, not a reason
+ * to fail the user's /feed submission).
+ */
 export async function createGithubIssue(
   config: GithubRepoConfig,
   content: CreateIssueContent,
@@ -55,5 +67,14 @@ export async function createGithubIssue(
   }
 
   const json = (await response.json()) as GithubIssueResponse;
+
+  const appliedLabels = new Set(json.labels.map((label) => (typeof label === 'string' ? label : label.name)));
+  const missingLabels = content.labels.filter((label) => !appliedLabels.has(label));
+  if (missingLabels.length > 0) {
+    logger.warn(
+      `Issue #${json.number}にラベルが付与されませんでした(リポジトリに存在しない可能性): ${missingLabels.join(', ')}`,
+    );
+  }
+
   return { url: json.html_url, number: json.number };
 }
