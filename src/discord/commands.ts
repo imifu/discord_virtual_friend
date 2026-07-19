@@ -189,7 +189,7 @@ async function handleFeed(interaction: ChatInputCommandInteraction): Promise<voi
   const categoryLabel = CATEGORY_INFO[result.category].label;
   const message =
     result.outcome === 'commented'
-      ? `フィードバックを受け付けました。\n\n判定: ${categoryLabel}\n関連Issue: #${result.issueNumber}\n処理: Issueへコメントを追加しました。\n${result.issueUrl}`
+      ? `既に似通った内容のIssue(Feedback)が見つかりました。\n\n判定: ${categoryLabel}\n関連Issue: #${result.issueNumber}\n処理:既存Issueへ追加の情報として記録しました。\n${result.issueUrl}`
       : `フィードバックを受け付けました。\n\n判定: ${categoryLabel}\n処理: Issue #${result.issueNumber} を作成しました。\n${result.issueUrl}`;
 
   await interaction.editReply(message);
