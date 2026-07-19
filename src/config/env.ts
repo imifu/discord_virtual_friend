@@ -113,10 +113,11 @@ export interface AppConfig {
   };
   feed: {
     /** Cosine similarity (0-1) an open issue must reach before /feed comments on it instead of
-     *  creating a new issue. 0.65 was picked from real Xenova/paraphrase-multilingual-MiniLM-L12-v2
-     *  measurements (README section 21): differently-worded repeats of the same request scored
-     *  0.68-0.93, unrelated feedback scored 0.23-0.36. Issue #7 still flags this as something to
-     *  keep tuning from real usage, not a permanently validated constant. */
+     *  creating a new issue. Repository owner lowered this from 0.65 to 0.49 after real usage
+     *  (README section 21) kept missing genuine duplicates that scored just under 0.65 (e.g.
+     *  0.59); accepts a higher false-merge risk in exchange for catching more paraphrases.
+     *  Issue #7 still flags this as something to keep tuning from real usage, not a permanently
+     *  validated constant. */
     similarityThreshold: number;
     /** Minimum time (ms) a Discord user must wait between /feed submissions, to bound abuse/spam.
      *  5 minutes by default; lower for local testing via FEED_COOLDOWN_SECONDS. */
@@ -190,7 +191,7 @@ export function loadConfig(): AppConfig {
       repo: optionalString('GITHUB_REPO'),
     },
     feed: {
-      similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.65),
+      similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.49),
       cooldownMs: optionalNonNegativeInt('FEED_COOLDOWN_SECONDS', 300) * 1000,
     },
   };
