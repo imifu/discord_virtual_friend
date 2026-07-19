@@ -113,9 +113,10 @@ export interface AppConfig {
   };
   feed: {
     /** Cosine similarity (0-1) an open issue must reach before /feed comments on it instead of
-     *  creating a new issue. Repository owner lowered this from 0.65 to 0.49 after real usage
-     *  (README section 21) kept missing genuine duplicates that scored just under 0.65 (e.g.
-     *  0.59); accepts a higher false-merge risk in exchange for catching more paraphrases.
+     *  creating a new issue. Was briefly lowered to 0.49 to catch more paraphrases, but real
+     *  usage (README section 21) produced a confirmed false merge at 0.61 ("ラグい", a lag
+     *  complaint, attached to an unrelated "be funnier" issue) - the repository owner restored
+     *  0.65 to prioritize not merging unrelated feedback over catching every paraphrase.
      *  Issue #7 still flags this as something to keep tuning from real usage, not a permanently
      *  validated constant. */
     similarityThreshold: number;
@@ -191,7 +192,7 @@ export function loadConfig(): AppConfig {
       repo: optionalString('GITHUB_REPO'),
     },
     feed: {
-      similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.49),
+      similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.65),
       cooldownMs: optionalNonNegativeInt('FEED_COOLDOWN_SECONDS', 300) * 1000,
     },
   };
