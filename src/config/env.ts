@@ -113,8 +113,10 @@ export interface AppConfig {
   };
   feed: {
     /** Cosine similarity (0-1) an open issue must reach before /feed comments on it instead of
-     *  creating a new issue. 0.8 is a starting heuristic (Issue #7 flags the threshold itself as
-     *  something to tune from real usage, not a validated constant). */
+     *  creating a new issue. 0.65 was picked from real Xenova/paraphrase-multilingual-MiniLM-L12-v2
+     *  measurements (README section 21): differently-worded repeats of the same request scored
+     *  0.68-0.93, unrelated feedback scored 0.23-0.36. Issue #7 still flags this as something to
+     *  keep tuning from real usage, not a permanently validated constant. */
     similarityThreshold: number;
   };
 }
@@ -185,7 +187,7 @@ export function loadConfig(): AppConfig {
       repo: optionalString('GITHUB_REPO'),
     },
     feed: {
-      similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.8),
+      similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.65),
     },
   };
 
