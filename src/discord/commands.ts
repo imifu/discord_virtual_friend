@@ -12,6 +12,8 @@ import { loadConfig } from '../config/env.js';
 import { listDevices, formatDeviceList } from '../audio/device-list.js';
 import { startRelay, stopRelay } from '../services/bridge-service.js';
 import { MAX_CLIP_SECONDS, saveRecentClip } from '../services/clip-service.js';
+import { submitFeedback } from '../services/feedback-service.js';
+import { CATEGORY_INFO } from '../services/feedback-classifier.js';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -42,6 +44,16 @@ export const commandDefinitions = [
   new SlashCommandBuilder()
     .setName('airprompt')
     .setDescription('ChatGPT Liveへ設定する空気読みモード用プロンプトを表示します'),
+  new SlashCommandBuilder()
+    .setName('feed')
+    .setDescription('改善案や不具合をGitHub Issueとして送信します(自動投稿・公開リポジトリ)')
+    .addStringOption((option) =>
+      option
+        .setName('content')
+        .setDescription('フィードバック内容(例: AIが少し早口だった)')
+        .setRequired(true)
+        .setMaxLength(1000),
+    ),
 ].map((builder) => builder.toJSON());
 
 type Handler = (interaction: ChatInputCommandInteraction) => Promise<void>;
@@ -162,6 +174,23 @@ async function handleAirPrompt(interaction: ChatInputCommandInteraction): Promis
   await interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
+async function handleFeed(interaction: ChatInputCommandInteraction): Promise<void> {
+  const content = interaction.options.getString('content', true);
+  const member = interaction.member as GuildMember | null;
+  await interaction.deferReply();
+
+  const result = await submitFeedback({
+    text: content,
+    userId: interaction.user.id,
+    authorName: member?.displayName ?? interaction.user.username,
+    guildName: interaction.guild?.name ?? '(不明なサーバー)',
+  });
+
+  await interaction.editReply(
+    `フィードバックを送信しました(分類: ${CATEGORY_INFO[result.category].label})。\n${result.issueUrl}`,
+  );
+}
+
 const handlers: Record<string, Handler> = {
   join: handleJoin,
   leave: handleLeave,
@@ -172,6 +201,7 @@ const handlers: Record<string, Handler> = {
   status: handleStatus,
   clip: handleClip,
   airprompt: handleAirPrompt,
+  feed: handleFeed,
 };
 
 export async function dispatchCommand(interaction: ChatInputCommandInteraction): Promise<void> {
