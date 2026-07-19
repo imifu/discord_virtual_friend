@@ -78,6 +78,9 @@ interface GuildState {
 
 const guildStates = new Map<string, GuildState>();
 
+/** Guild ids with a startRelay() call currently claiming the exclusive right to initialize. */
+const startingGuilds = new Set<string>();
+
 function defaultStatus(): GuildStatus {
   return {
     connected: false,
@@ -124,4 +127,24 @@ export function clearLastError(guildId: string): void {
 
 export function resetGuildState(guildId: string): void {
   guildStates.set(guildId, { runtime: {}, status: defaultStatus() });
+  startingGuilds.delete(guildId);
+}
+
+/**
+ * Atomically claims the exclusive right to start the relay for a guild. Returns false
+ * if the relay is already running or another start is already in progress, so the
+ * caller can reject instead of racing a second startRelay() into a partially torn-down
+ * runtime while the first attempt's failure-path cleanup is still in flight.
+ */
+export function tryBeginRelayStart(guildId: string): boolean {
+  if (getStatus(guildId).relayRunning || startingGuilds.has(guildId)) {
+    return false;
+  }
+  startingGuilds.add(guildId);
+  return true;
+}
+
+/** Releases the claim taken by tryBeginRelayStart. Safe to call even if no claim is held. */
+export function endRelayStart(guildId: string): void {
+  startingGuilds.delete(guildId);
 }

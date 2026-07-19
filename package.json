@@ -12,7 +12,8 @@
     "register": "tsx src/discord/command-register.ts",
     "devices": "tsx src/audio/device-list.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "tsx --test src/state/bridge-state.test.ts"
   },
   "engines": {
     "node": ">=20"

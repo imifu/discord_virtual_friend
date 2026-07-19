@@ -273,6 +273,7 @@ ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 ## 手動テスト手順
 
 自動化できない項目(実際のDiscord接続・音声デバイスが必要なもの)は、以下の手順で手動確認してください。
+純粋ロジックの自動テストは `npm run test` で実行できます。
 
 | # | 項目 | 手順 | 期待結果 |
 |---|---|---|---|
