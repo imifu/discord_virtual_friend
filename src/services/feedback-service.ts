@@ -25,8 +25,10 @@ export interface SubmitFeedbackResult {
  * Classifies /feed text and posts it as a new GitHub issue immediately (Issue #7 Phase 1: no
  * human review step, no similar-issue lookup - both are deferred to a later phase).
  *
- * authorName/guildName are logged locally for audit purposes only and are never sent to GitHub
- * (see buildIssueContent) - Issue #7 states Discord usernames/IDs must not be published there.
+ * authorName is published to GitHub in masked form only (see buildIssueContent/maskAuthorName -
+ * a deliberate, explicit exception to Issue #7's "don't publish Discord identities" principle).
+ * guildName has no such exception: it's logged locally for audit purposes only and is never sent
+ * to GitHub.
  *
  * The submission claim (tryBeginFeedSubmission/endFeedSubmission) is held across the whole
  * GitHub API call, not just the cooldown check: without it, two near-simultaneous /feed calls
@@ -49,7 +51,7 @@ export async function submitFeedback(
   try {
     const githubConfig = requireGithubConfig(loadConfig());
     const category = classifyFeedback(text);
-    const content = buildIssueContent({ text, category, submittedAt: new Date() });
+    const content = buildIssueContent({ text, category, authorName, submittedAt: new Date() });
     const issue = await createIssue(githubConfig, content);
 
     logger.info(

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildIssueContent } from './feedback-content.js';
 
 const baseInput = {
+  authorName: 'テストユーザー',
   submittedAt: new Date('2026-07-19T12:00:00+09:00'),
 };
 
@@ -25,24 +26,37 @@ test('labels reflect the classified category', () => {
   assert.deepEqual(labels, ['bug']);
 });
 
-test('body includes the category and a /feed attribution, but never the Discord author or guild name (Issue #7 requirement / Codex finding)', () => {
+// No guild-name test here: FeedbackContentInput has no guildName field at all (Issue #7
+// requirement, no exception unlike the author name below), so there is nothing to assert beyond
+// what the type system already guarantees.
+test('body includes the category and a /feed attribution', () => {
   const { body } = buildIssueContent({ ...baseInput, text: 'テスト内容', category: 'question' });
-
   assert.ok(body.includes('質問'));
   assert.ok(body.includes('/feed'));
-  assert.ok(!body.includes('送信者'));
-  assert.ok(!body.includes('サーバー'));
 });
 
-test('mentions in feedback text are neutralized so GitHub does not notify the mentioned account (Codex finding)', () => {
+test('author name is published masked: only the first 2 characters are visible, the rest is *', () => {
+  const { body } = buildIssueContent({ ...baseInput, text: 'テスト', category: 'bug', authorName: 'たなかたろう' });
+
+  assert.ok(body.includes('- 送信者: たな****'));
+  assert.ok(!body.includes('たなかたろう'), 'the full unmasked name must never appear');
+});
+
+test('author names of 2 characters or fewer are shown as-is (nothing left to mask)', () => {
+  const { body } = buildIssueContent({ ...baseInput, text: 'テスト', category: 'bug', authorName: 'AB' });
+  assert.ok(body.includes('- 送信者: AB'));
+});
+
+test('mentions in feedback text or the masked author name are neutralized (Codex finding)', () => {
   const { title, body } = buildIssueContent({
     ...baseInput,
     text: '@octocat さん、@some-org/some-team にも見てほしいです',
     category: 'enhancement',
+    authorName: '@dangerous_user',
   });
 
   assert.ok(!/@[A-Za-z0-9]/.test(title), 'title must not contain a live-looking @mention');
-  assert.ok(!/@[A-Za-z0-9]/.test(body), 'body must not contain a live-looking @mention');
+  assert.ok(!/@[A-Za-z0-9]/.test(body), 'body must not contain a live-looking @mention, including in the masked author name');
   assert.ok(body.includes('octocat'), 'the original text content should still be readable');
 });
 
