@@ -111,6 +111,12 @@ export interface AppConfig {
     token?: string;
     repo?: string;
   };
+  feed: {
+    /** Cosine similarity (0-1) an open issue must reach before /feed comments on it instead of
+     *  creating a new issue. 0.8 is a starting heuristic (Issue #7 flags the threshold itself as
+     *  something to tune from real usage, not a validated constant). */
+    similarityThreshold: number;
+  };
 }
 
 let cached: AppConfig | undefined;
@@ -177,6 +183,9 @@ export function loadConfig(): AppConfig {
     github: {
       token: optionalString('GITHUB_TOKEN'),
       repo: optionalString('GITHUB_REPO'),
+    },
+    feed: {
+      similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.8),
     },
   };
 
