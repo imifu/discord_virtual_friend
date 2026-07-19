@@ -118,6 +118,9 @@ export interface AppConfig {
      *  0.68-0.93, unrelated feedback scored 0.23-0.36. Issue #7 still flags this as something to
      *  keep tuning from real usage, not a permanently validated constant. */
     similarityThreshold: number;
+    /** Minimum time (ms) a Discord user must wait between /feed submissions, to bound abuse/spam.
+     *  5 minutes by default; lower for local testing via FEED_COOLDOWN_SECONDS. */
+    cooldownMs: number;
   };
 }
 
@@ -188,6 +191,7 @@ export function loadConfig(): AppConfig {
     },
     feed: {
       similarityThreshold: optionalUnitFloat('FEED_SIMILARITY_THRESHOLD', 0.65),
+      cooldownMs: optionalNonNegativeInt('FEED_COOLDOWN_SECONDS', 300) * 1000,
     },
   };
 

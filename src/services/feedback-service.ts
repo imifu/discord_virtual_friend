@@ -65,13 +65,13 @@ export async function submitFeedback(
   const listIssues = deps.listOpenIssues ?? listOpenIssues;
   const embedText = deps.embedText ?? embedFeedbackText;
 
-  const claim = tryBeginFeedSubmission(userId);
+  const config = loadConfig();
+  const claim = tryBeginFeedSubmission(userId, config.feed.cooldownMs);
   if (!claim.ok) {
     throw new FeedCooldownError(claim.retryAfterMs);
   }
 
   try {
-    const config = loadConfig();
     const githubConfig = requireGithubConfig(config);
     const category = classifyFeedback(text);
     const submittedAt = new Date();
